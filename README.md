@@ -72,3 +72,8 @@ Replace these prompts with actual entries as the build changes. Record the commi
 - `piece.js` — B-2 flight game rendered on canvas; reads `window.sense` only.
 - `fake-sense.js` — keyboard/pointer sensor substitute for development.
 - `index.html` — loads the files in the required order.
+
+## Debugging Incidents
+1. Camera would not load
+2. The plane would move to the wrong side
+3. The plane's speed changes were not very visible
