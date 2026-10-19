@@ -1,12 +1,12 @@
-# Canopy Run — Sensor Layer Prototype
+# Canopy Run — B-2 Stealth Flight Sensor Layer Prototype
 
-**Piece:** A hands-free drone navigation game. The drone follows a route through a dense aerial map of trees and buildings. Stillness steadies its path; moving closer adds throttle; hitting highlighted hazards costs integrity.
+**Piece:** A hands-free drone navigation game. A top-down B-2 Spirit-style stealth bomber follows a route through a dense aerial map of trees and buildings. Stillness steadies its path; moving closer sharply increases throttle (roughly 4–1104 speed units); high speed adds motion streaks; hitting highlighted hazards costs integrity.
 
 ## What it does for the person
-Canopy Run lets a visitor pilot a survey drone through a crowded aerial map using their stillness and distance from the camera instead of a keyboard controller.
+Canopy Run lets a visitor pilot a stylized B-2 stealth bomber through a crowded aerial map using their stillness and distance from the camera instead of a keyboard controller.
 
 ## What it does to the person
-It recruits the visitor's body as part of the control system: head movement makes the drone drift, while leaning closer accelerates the flight and makes obstacle timing harder.
+It recruits the visitor's body as part of the control system: head movement makes the bomber drift, while leaning closer accelerates it from a slow crawl to a much faster run and makes obstacle timing harder.
 
 ## Signals and ownership
 
@@ -69,6 +69,6 @@ Replace these prompts with actual entries as the build changes. Record the commi
 
 - `sense.js` — MediaPipe camera, signal calculations, smoothing, State Table evaluation, and `window.sense` writer.
 - `table.js` — state names, rules, and hold times.
-- `piece.js` — drone-map game rendered on canvas; reads `window.sense` only.
+- `piece.js` — B-2 flight game rendered on canvas; reads `window.sense` only.
 - `fake-sense.js` — keyboard/pointer sensor substitute for development.
 - `index.html` — loads the files in the required order.

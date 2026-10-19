@@ -306,36 +306,107 @@ function drawHazard(hazard, droneY, now) {
 }
 
 function drawDrone(x, y, still, state, now) {
-  const color = state === 'turbulent' ? COLORS.danger : (state === 'boost' ? COLORS.amber : COLORS.mint);
-  const size = Math.max(1, Math.min(width, height) * 0.018);
-  const pulse = 1 + Math.sin(now * 0.006) * 0.08;
+  // Stylized top-down B-2 Spirit silhouette: broad flying wing, swept leading
+  // edge, and the characteristic shallow serrations along the trailing edge.
+  // It is drawn as an aircraft silhouette, not a quadcopter or rotor drone.
+  const accent = state === 'turbulent' ? COLORS.danger : (state === 'boost' ? COLORS.amber : '#b8c9c8');
+  const size = Math.max(1, Math.min(width, height) * 0.022);
+  const pulse = 1 + Math.sin(now * 0.006) * 0.025;
+  const scaleY = 0.92;
 
+  // Stillness affects the small banking angle as well as lateral drift.
+  const bank = (0.5 - still) * 0.10;
   ctx.save();
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 18;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.ellipse(x, y, size * 2.4 * pulse, size * 1.6 * pulse, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.shadowBlur = 0;
+  ctx.translate(x, y);
+  ctx.rotate(bank);
+  ctx.scale(pulse, pulse * scaleY);
 
-  // Four rotor arms and a forward-facing pointer.
-  ctx.lineWidth = 2.5;
+  // Soft navigation glow around the aircraft.
+  ctx.shadowColor = accent;
+  ctx.shadowBlur = 15;
+  ctx.fillStyle = 'rgba(9, 13, 16, 0.94)';
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 1.4;
   ctx.beginPath();
-  ctx.moveTo(x - size * 1.35, y - size * 0.8); ctx.lineTo(x + size * 1.35, y + size * 0.8);
-  ctx.moveTo(x + size * 1.35, y - size * 0.8); ctx.lineTo(x - size * 1.35, y + size * 0.8);
-  ctx.stroke();
-  ctx.fillStyle = COLORS.ink;
-  ctx.beginPath();
-  ctx.moveTo(x, y - size * 1.6);
-  ctx.lineTo(x - size * 0.8, y + size * 0.7);
-  ctx.lineTo(x + size * 0.8, y + size * 0.7);
+  ctx.moveTo(0, -size * 1.62);             // nose
+  ctx.lineTo(-size * 0.48, -size * 1.40);
+  ctx.lineTo(-size * 2.85, -size * 0.38);
+  ctx.lineTo(-size * 3.38, size * 0.32);  // left wingtip
+  ctx.lineTo(-size * 2.66, size * 0.18);
+  ctx.lineTo(-size * 2.28, size * 0.57);
+  ctx.lineTo(-size * 1.86, size * 0.34);
+  ctx.lineTo(-size * 1.43, size * 0.69);
+  ctx.lineTo(-size * 1.03, size * 0.45);
+  ctx.lineTo(-size * 0.62, size * 0.70);
+  ctx.lineTo(-size * 0.26, size * 0.49);
+  ctx.lineTo(0, size * 0.54);
+  ctx.lineTo(size * 0.26, size * 0.49);
+  ctx.lineTo(size * 0.62, size * 0.70);
+  ctx.lineTo(size * 1.03, size * 0.45);
+  ctx.lineTo(size * 1.43, size * 0.69);
+  ctx.lineTo(size * 1.86, size * 0.34);
+  ctx.lineTo(size * 2.28, size * 0.57);
+  ctx.lineTo(size * 2.66, size * 0.18);
+  ctx.lineTo(size * 3.38, size * 0.32);   // right wingtip
+  ctx.lineTo(size * 2.85, -size * 0.38);
+  ctx.lineTo(size * 0.48, -size * 1.40);
   ctx.closePath();
   ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.stroke();
+
+  // Subtle center spine and angled panel lines to read as a flying wing.
+  ctx.strokeStyle = 'rgba(205, 218, 218, 0.52)';
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(0, -size * 1.43);
+  ctx.lineTo(0, size * 0.38);
+  ctx.moveTo(-size * 0.50, -size * 1.31);
+  ctx.lineTo(-size * 1.44, size * 0.34);
+  ctx.moveTo(size * 0.50, -size * 1.31);
+  ctx.lineTo(size * 1.44, size * 0.34);
+  ctx.moveTo(-size * 2.63, -size * 0.25);
+  ctx.lineTo(-size * 1.90, size * 0.16);
+  ctx.moveTo(size * 2.63, -size * 0.25);
+  ctx.lineTo(size * 1.90, size * 0.16);
+  ctx.stroke();
+
+  // Twin subdued exhaust/engine areas near the rear edge; no propellers.
+  ctx.fillStyle = 'rgba(125, 145, 151, 0.78)';
+  roundedRect(-size * 0.40, size * 0.18, size * 0.25, size * 0.20, 2, 'rgba(125,145,151,0.55)');
+  roundedRect(size * 0.15, size * 0.18, size * 0.25, size * 0.20, 2, 'rgba(125,145,151,0.55)');
+
+  // The navigation marker is brighter when the pilot holds steady.
+  ctx.globalAlpha = 0.45 + still * 0.5;
+  ctx.fillStyle = accent;
+  ctx.beginPath();
+  ctx.arc(0, -size * 0.84, Math.max(1.2, size * 0.075), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
   ctx.restore();
 }
 
+function drawSpeedStreaks(speed, now) {
+  // The motion effect ramps in only at higher throttle, making the difference
+  // between a crawl and a close-in high-speed run unmistakable.
+  const intensity = clamp((speed - 35) / 850);
+  if (intensity <= 0) return;
+  const count = Math.floor(3 + intensity * 52);
+  const flow = (now * (0.06 + intensity * 2.4)) % (height + 120);
+  ctx.save();
+  ctx.lineWidth = 1 + intensity * 1.2;
+  ctx.strokeStyle = `rgba(224, 237, 230, ${0.08 + intensity * 0.24})`;
+  for (let i = 0; i < count; i++) {
+    const x = rand(i, Math.floor(now / 120), 21) * width;
+    const y = (rand(i, 3, 22) * (height + 120) + flow) % (height + 120) - 60;
+    const length = 5 + intensity * (25 + rand(i, 4, 23) * 90);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - intensity * 2, y + length);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 function drawBar(x, y, w, value, color, label) {
   ctx.font = '10px ui-monospace, Menlo, monospace';
   ctx.fillStyle = COLORS.muted;
@@ -349,10 +420,10 @@ function drawHud({ state, still, near, present, speed, droneX, droneY, now }) {
   roundedRect(14, 14, Math.min(276, width - 28), 112, 12, 'rgba(8,16,15,0.83)', 'rgba(198,224,204,0.20)');
   ctx.fillStyle = COLORS.mint;
   ctx.font = 'bold 13px ui-monospace, Menlo, monospace';
-  ctx.fillText('CANOPY RUN', 27, 36);
+  ctx.fillText('CANOPY RUN / B-2', 27, 36);
   ctx.fillStyle = COLORS.muted;
   ctx.font = '9px ui-monospace, Menlo, monospace';
-  ctx.fillText('UAV / ROUTE STABILIZATION', 27, 51);
+  ctx.fillText('B-2 STEALTH FLIGHT / ROUTE CONTROL', 27, 51);
   const stateColor = state === 'turbulent' ? COLORS.danger : (state === 'boost' ? COLORS.amber : COLORS.mint);
   roundedRect(27, 61, 88, 19, 6, 'rgba(255,255,255,0.06)', `rgba(255,255,255,0.15)`);
   ctx.fillStyle = stateColor;
@@ -383,10 +454,10 @@ function drawHud({ state, still, near, present, speed, droneX, droneY, now }) {
   roundedRect(14, height - 54, Math.min(420, width - 28), 40, 9, 'rgba(8,16,15,0.80)', 'rgba(198,224,204,0.18)');
   ctx.fillStyle = COLORS.ink;
   ctx.font = '10px ui-monospace, Menlo, monospace';
-  ctx.fillText('KEEP STILL  /  HOLD THE ROUTE', 26, height - 37);
+  ctx.fillText('B-2 SPIRIT  /  HOLD A STEADY FLIGHT PATH', 26, height - 37);
   ctx.fillStyle = COLORS.muted;
   ctx.font = '9px ui-monospace, Menlo, monospace';
-  ctx.fillText('LEAN CLOSER = BOOST  •  AVOID AMBER HAZARDS', 26, height - 23);
+  ctx.fillText('LEAN CLOSER = HIGH THROTTLE  •  AVOID HAZARDS', 26, height - 23);
 
   // Small radar compass marks, not a camera preview.
   const cx = width - 38;
@@ -461,7 +532,12 @@ function frame(now) {
 
   if (rebootUntil && now >= rebootUntil) resetRun(now);
   const active = present > 0.25 && !(rebootUntil && now < rebootUntil);
-  const speed = active ? 34 + near * 112 : 0;
+  // Deliberately extreme throttle range: far from camera = near-stationary crawl;
+  // close = high-speed run. The cubic curve makes the difference dramatic.
+  const throttle = Math.pow(near, 3.0);
+  // Very broad response curve: far from the camera is a near-stationary crawl;
+  // leaning close produces a sudden, unmistakable high-speed surge.
+  const speed = active ? 4 + throttle * 1100 : 0;
   if (active) worldY += speed * dt;
   ensureHazards();
 
@@ -490,6 +566,7 @@ function frame(now) {
 
   drawMap(droneY);
   drawRoute(droneY);
+  drawSpeedStreaks(speed, now);
   for (const hazard of hazards) drawHazard(hazard, droneY, now);
   drawDrone(droneX, droneY, still, state, now);
   drawHud({ state, still, near, present, speed, droneX, droneY, now });
