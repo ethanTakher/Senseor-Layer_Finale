@@ -1,16 +1,7 @@
-// sense.js: reads the camera, turns readings into signals, applies table.js,
-// and writes window.sense.
-//
-// The instrument is the one from the Make a Face lab: MediaPipe Face Landmarker,
-// 478 points and the same 52 named scores (press B to see them live). It is
-// pinned to one version so it cannot change under you mid-module.
-//
-// What stays in the browser: every frame is read and dropped. Nothing here saves
-// a frame or a landmark list. The model downloads once when the page loads;
-// after that the Network panel should stay quiet.
+// sense.js: camera -> signals -> State Table -> window.sense.
+// Frames and landmarks remain in this browser tab; they are not saved or uploaded.
+// The piece.js game reads only window.sense and never reads the camera directly.
 
-// The library loads when you click Start, not before, so a blocked network shows
-// up as a message on screen instead of a button that does nothing.
 const LIBRARY = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/vision_bundle.mjs';
 const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/wasm';
 const MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -22,67 +13,58 @@ const scores = document.querySelector('#scores');
 
 let landmarker = null;
 let lastVideoTime = -1;
-let latestScores = []; // the 52 named scores from the last frame, for the B panel only
-let failed = false;    // the camera did not start; the readout holds the reason
+let latestScores = [];
+let failed = false;
 
-// ---- Signals --------------------------------------------------------------
-// Each function gets one frame's result and returns a number from 0 to 1.
-// Add yours here. Its name has to match a name in table.js signals.
+function clamp(value) {
+  return Math.min(1, Math.max(0, value));
+}
 
-const SIGNALS = {
-  // present: 1 when a face is in view, 0 when not. Smoothed below, so one
-  // missed frame does not count as somebody leaving.
-  present: result => (result.faceLandmarks.length > 0 ? 1 : 0),
-
-  // open: the worked signal. jawOpen is one of the 52 scores, already 0 to 1.
-  open: result => score(result, 'jawOpen'),
-
-  // Your signal goes here. Two patterns to copy:
-  //
-  // A named score from the lab (the B panel shows every name):
-  //   smile: result => (score(result, 'mouthSmileLeft') + score(result, 'mouthSmileRight')) / 2,
-  //
-  // Geometry from the 478 points (x and y run 0 to 1 across the frame):
-  // A number that needs the last frame too, kept in a closure (how little the
-  // nose moved since the previous frame):
-  //   still: (() => {
-  //     let last = null;
-  //     return result => {
-  //       const nose = result.faceLandmarks[0] && result.faceLandmarks[0][1];
-  //       if (!nose) { last = null; return 0; }
-  //       const moved = last ? Math.hypot(nose.x - last.x, nose.y - last.y) : 0;
-  //       last = nose;
-  //       return clamp(1 - moved * 40); // a jump of 1/40 of the frame reads 0
-  //     };
-  //   })(),
-  //
-  //   near: result => {
-  //     const face = result.faceLandmarks[0];
-  //     if (!face) return 0;
-  //     const width = Math.abs(face[454].x - face[234].x); // cheek to cheek
-  //     return clamp((width - 0.15) / 0.35);               // 0.15 far ... 0.5 at the screen
-  //   },
-};
-
-// One of the 52 scores by name, or 0 when no face is in view.
 function score(result, name) {
   const face = result.faceBlendshapes[0];
   if (!face) return 0;
-  const found = face.categories.find(c => c.categoryName === name);
+  const found = face.categories.find(category => category.categoryName === name);
   return found ? found.score : 0;
 }
 
-function clamp(x) {
-  return Math.min(1, Math.max(0, x));
-}
+// Each signal reads one frame and returns a value from 0 to 1.
+const SIGNALS = {
+  present: result => result.faceLandmarks.length > 0 ? 1 : 0,
 
-// Smoothing: each new reading moves the signal a fraction of the way. Higher is
-// jumpier, lower is calmer. Thresholds in table.js read the smoothed numbers.
+  // User-owned signal: less nose movement between frames means more stillness.
+  // We retain only the previous nose coordinate needed for this measurement;
+  // no landmark array or video frame is saved.
+  still: (() => {
+    let previousNose = null;
+    return result => {
+      const face = result.faceLandmarks[0];
+      const nose = face && face[1];
+      if (!nose) {
+        previousNose = null;
+        return 0;
+      }
+      const movement = previousNose
+        ? Math.hypot(nose.x - previousNose.x, nose.y - previousNose.y)
+        : 0;
+      previousNose = { x: nose.x, y: nose.y };
+      // A movement of about 1/32 of the frame reads as very unsteady.
+      return clamp(1 - movement * 32);
+    };
+  })(),
+
+  // Partner-owned signal: normalized face width acts as a rough proxy for
+  // nearness. This measures image geometry, not a physical distance in cm.
+  near: result => {
+    const face = result.faceLandmarks[0];
+    if (!face) return 0;
+    const cheekWidth = Math.abs(face[454].x - face[234].x);
+    return clamp((cheekWidth - 0.14) / 0.34);
+  },
+};
+
+// Smooth each value so one noisy frame does not sharply change the controls.
 const SMOOTHING = 0.25;
-
-// ---- The State Table, applied ----------------------------------------------
-
-const signals = window.sense.signals; // the object fake-sense.js made, kept
+const signals = window.sense.signals;
 let candidate = null;
 let candidateSince = 0;
 
@@ -104,17 +86,16 @@ function applyTable(now) {
   }
 }
 
-// ---- The loop ---------------------------------------------------------------
-
 function tick() {
   const now = performance.now();
-  if (video.currentTime !== lastVideoTime) {
+  if (landmarker && video.currentTime !== lastVideoTime) {
     lastVideoTime = video.currentTime;
     const result = landmarker.detectForVideo(video, now);
     for (const name of window.TABLE.signals) {
       const read = SIGNALS[name];
       if (!read) continue;
-      signals[name] += (clamp(read(result)) - signals[name]) * SMOOTHING;
+      const target = clamp(read(result));
+      signals[name] += (target - signals[name]) * SMOOTHING;
     }
     latestScores = result.faceBlendshapes[0] ? result.faceBlendshapes[0].categories : [];
   }
@@ -125,15 +106,16 @@ function tick() {
 async function start() {
   button.disabled = true;
   button.textContent = 'Loading the model…';
-  let FaceLandmarker, FilesetResolver;
+  let FaceLandmarker;
+  let FilesetResolver;
   try {
     ({ FaceLandmarker, FilesetResolver } = await import(LIBRARY));
-  } catch (err) {
-    console.error(err);
-    showFailure('The face library did not load (cdn.jsdelivr.net is blocked or offline). ' +
-      'Press D: the fake sensor still works, so keep building the piece.');
+  } catch (error) {
+    console.error(error);
+    showFailure('The face library did not load (the CDN may be blocked or you may be offline). The fake sensor still works: move the pointer or press 1–5.');
     return;
   }
+
   try {
     const vision = await FilesetResolver.forVisionTasks(WASM);
     const options = {
@@ -144,29 +126,31 @@ async function start() {
     };
     try {
       landmarker = await FaceLandmarker.createFromOptions(vision, options);
-    } catch {
-      options.baseOptions.delegate = 'CPU'; // some machines refuse the GPU path
+    } catch (gpuError) {
+      options.baseOptions.delegate = 'CPU';
       landmarker = await FaceLandmarker.createFromOptions(vision, options);
     }
-    button.textContent = 'Asking for the camera…';
-    video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+
+    button.textContent = 'Asking for camera permission…';
+    video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
     await video.play();
+
     for (const name of window.TABLE.signals) {
-      if (!SIGNALS[name]) console.warn(`table.js names a signal "${name}" that sense.js does not read yet.`);
+      if (!SIGNALS[name]) console.warn(`table.js names signal "${name}" but sense.js does not read it yet.`);
     }
     window.senseLive = true;
     failed = false;
     button.remove();
     requestAnimationFrame(tick);
-  } catch (err) {
-    console.error(err);
-    showFailure(`Camera did not start: ${err.message}`);
+  } catch (error) {
+    console.error(error);
+    showFailure(`Camera did not start: ${error.message}. Try localhost or the public HTTPS page, and check camera permission.`);
   }
 }
 
 function showFailure(message) {
   button.disabled = false;
-  button.textContent = 'Did not start. Try again';
+  button.textContent = 'Try camera again';
   failed = true;
   readout.hidden = false;
   readout.textContent = message;
@@ -174,14 +158,11 @@ function showFailure(message) {
 
 button.addEventListener('click', start);
 
-// ---- Readouts ---------------------------------------------------------------
-// D shows the object piece.js reads. B shows all 52 scores, to find the name of
-// the one you measured in the lab. V shows the camera. All off by default.
-
-addEventListener('keydown', e => {
-  const key = e.key.toLowerCase();
+// Optional diagnostics: D = window.sense, B = 52 scores, V = show camera preview.
+addEventListener('keydown', event => {
+  const key = event.key.toLowerCase();
   if (key === 'd') {
-    if (failed) { failed = false; readout.hidden = false; return; } // swap the message for the fake readout
+    if (failed) failed = false;
     readout.hidden = !readout.hidden;
   }
   if (key === 'b') scores.hidden = !scores.hidden;
@@ -190,17 +171,15 @@ addEventListener('keydown', e => {
 
 function drawReadouts() {
   if (!readout.hidden && !failed) {
-    const { state, signals: s, since } = window.sense;
+    const { state, signals: values, since } = window.sense;
     const held = ((performance.now() - since) / 1000).toFixed(1);
-    const lines = Object.entries(s).map(([k, v]) => `${k.padEnd(8)} ${v.toFixed(2)}`);
-    readout.textContent =
-      `${window.senseLive ? 'camera on' : 'fake: keys 1-9, mouse'}\n` +
-      `state    ${state}  (${held} s)\n` + lines.join('\n');
+    const lines = Object.entries(values).map(([key, value]) => `${key.padEnd(8)} ${value.toFixed(2)}`);
+    readout.textContent = `${window.senseLive ? 'camera on' : 'fake: pointer / keys 1-5'}\nstate    ${state} (${held} s)\n${lines.join('\n')}`;
   }
   if (!scores.hidden) {
     scores.textContent = latestScores.length
-      ? latestScores.map(c => `${c.categoryName.padEnd(20)} ${c.score.toFixed(2)}`).join('\n')
-      : 'no face in view (start the camera first)';
+      ? latestScores.map(category => `${category.categoryName.padEnd(20)} ${category.score.toFixed(2)}`).join('\n')
+      : 'No face scores yet. Start the camera first.';
   }
   requestAnimationFrame(drawReadouts);
 }

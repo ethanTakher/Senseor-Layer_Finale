@@ -3,32 +3,40 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sensor Layer starter</title>
+  <meta name="theme-color" content="#111d1b">
+  <title>Canopy Run — Sensor Layer</title>
   <link rel="icon" href="data:,">
   <style>
-    html, body { margin: 0; height: 100%; background: #0b0b0d; overflow: hidden; }
-    #piece { position: fixed; inset: 0; width: 100vw; height: 100vh; }
-    #camera { position: fixed; right: 12px; bottom: 12px; width: 200px; transform: scaleX(-1);
-              border-radius: 4px; opacity: 0; pointer-events: none; }
+    :root { color-scheme: dark; }
+    html, body { margin: 0; width: 100%; height: 100%; background: #111d1b; overflow: hidden; }
+    body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    #piece { position: fixed; inset: 0; display: block; width: 100vw; height: 100vh; }
+    #camera { position: fixed; z-index: 3; right: 12px; bottom: 12px; width: 200px; transform: scaleX(-1);
+              border-radius: 4px; opacity: 0; pointer-events: none; border: 1px solid rgba(255,255,255,.25); }
     #camera.shown { opacity: 1; }
-    #start { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
-             font: 16px/1.2 system-ui, sans-serif; padding: 12px 20px; border-radius: 6px;
-             border: 1px solid #f2efe9; background: transparent; color: #f2efe9; cursor: pointer; }
-    #start:disabled { opacity: 0.6; cursor: wait; }
-    pre { position: fixed; margin: 0; padding: 10px 12px; font: 12px/1.45 ui-monospace, Menlo, monospace;
-          color: #f2efe9; background: rgba(0, 0, 0, 0.7); border-radius: 4px; white-space: pre; }
-    #readout { left: 12px; top: 12px; }
-    #scores { right: 12px; top: 12px; max-height: calc(100vh - 24px); overflow: auto; }
+    #start { position: fixed; z-index: 5; left: 50%; top: 50%; transform: translate(-50%, -50%);
+             font: 600 14px/1.2 ui-monospace, Menlo, monospace; letter-spacing: .03em;
+             padding: 14px 20px; border-radius: 8px; border: 1px solid #d4ebdb;
+             background: rgba(8, 18, 15, .94); color: #f1f3e9; cursor: pointer;
+             box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+    #start:hover { background: #1e4433; }
+    #start:focus-visible { outline: 3px solid #76f0bf; outline-offset: 4px; }
+    #start:disabled { opacity: .7; cursor: wait; }
+    pre { position: fixed; z-index: 6; margin: 0; padding: 10px 12px; font: 12px/1.45 ui-monospace, Menlo, monospace;
+          color: #f1f3e9; background: rgba(0, 0, 0, .82); border: 1px solid rgba(255,255,255,.12);
+          border-radius: 6px; white-space: pre; }
+    #readout { left: 12px; top: 12px; max-width: calc(100vw - 48px); }
+    #scores { right: 12px; top: 12px; max-height: calc(100vh - 24px); max-width: min(340px, 50vw); overflow: auto; }
   </style>
 </head>
 <body>
-  <canvas id="piece"></canvas>
+  <canvas id="piece" aria-label="Canopy Run drone navigation game"></canvas>
   <video id="camera" playsinline muted></video>
-  <button id="start">Start the camera</button>
+  <button id="start" type="button">Start the camera</button>
   <pre id="readout" hidden></pre>
   <pre id="scores" hidden></pre>
 
-  <!-- Order matters: the table first, then the fake sensor, then the piece. -->
+  <!-- Load order is required: table -> fake sensor -> piece -> live camera sensor. -->
   <script src="table.js"></script>
   <script src="fake-sense.js"></script>
   <script src="piece.js"></script>

@@ -1,36 +1,43 @@
-// fake-sense.js: the same object, with no sensor attached.
-//
-// Loaded first, so piece.js never reads an empty object. Until the camera is on:
-//   number keys 1, 2, 3 ... set the state (in the order of your table's rows)
-//   the mouse sets the signals: left to right is the first signal, top to bottom
-//   the second
-// When sense.js goes live it sets window.senseLive and this file stops writing.
+// fake-sense.js: drives the exact same window.sense object without a webcam.
+// Before the live sensor starts:
+//   - Move the pointer left/right to control stillness (0 -> 1).
+//   - Move the pointer bottom/top to control nearness (0 -> 1).
+//   - Any pointer movement marks the mock visitor as present.
+//   - Number keys 1-5 force the corresponding State Table row for testing.
+// When sense.js sets window.senseLive, this file stops writing.
 
 (function () {
-  const names = window.TABLE.states.map(row => row.name);
-  const [first, second] = window.TABLE.signals;
-
+  const rows = window.TABLE.states;
   const signals = {};
   for (const name of window.TABLE.signals) signals[name] = 0;
 
   window.sense = {
-    state: names[names.length - 1], // the last row, usually "nobody"
+    state: rows[rows.length - 1].name,
     signals,
     since: performance.now(),
   };
 
-  addEventListener('keydown', e => {
-    if (window.senseLive) return;
-    const row = Number(e.key) - 1;
-    if (row >= 0 && row < names.length && names[row] !== window.sense.state) {
-      window.sense.state = names[row];
+  function setState(name) {
+    if (window.sense.state !== name) {
+      window.sense.state = name;
       window.sense.since = performance.now();
+    }
+  }
+
+  addEventListener('keydown', event => {
+    if (window.senseLive) return;
+    const index = Number(event.key) - 1;
+    if (Number.isInteger(index) && index >= 0 && index < rows.length) {
+      // Simulate a visitor as well as forcing the chosen state.
+      signals.present = 1;
+      setState(rows[index].name);
     }
   });
 
-  addEventListener('pointermove', e => {
+  addEventListener('pointermove', event => {
     if (window.senseLive) return;
-    if (first) signals[first] = e.clientX / innerWidth;
-    if (second) signals[second] = e.clientY / innerHeight;
+    signals.present = 1;
+    if (innerWidth > 0) signals.still = Math.min(1, Math.max(0, event.clientX / innerWidth));
+    if (innerHeight > 0) signals.near = Math.min(1, Math.max(0, 1 - event.clientY / innerHeight));
   });
 })();

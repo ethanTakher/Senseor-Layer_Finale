@@ -1,65 +1,74 @@
-# Sensor Layer starter
+# Canopy Run — Sensor Layer Prototype
 
-Computer Coding Studio, fall 2026. The camera, the model, one worked signal and a fake sensor, so your pair starts from a piece that already runs.
+**Piece:** A hands-free drone navigation game. The drone follows a route through a dense aerial map of trees and buildings. Stillness steadies its path; moving closer adds throttle; hitting highlighted hazards costs integrity.
 
-**Live:** https://flyinthelyceum.github.io/sensor-layer-starter/ (click Start the camera; press D, B, V)
+## What it does for the person
+Canopy Run lets a visitor pilot a survey drone through a crowded aerial map using their stillness and distance from the camera instead of a keyboard controller.
 
-## Make it yours
+## What it does to the person
+It recruits the visitor's body as part of the control system: head movement makes the drone drift, while leaning closer accelerates the flight and makes obstacle timing harder.
 
-1. Click **Use this template**, then **Create a new repository**, under one partner's account. Add the other partner as a collaborator (Settings, Collaborators).
-2. Both partners clone it, open it in VS Code, and run it with a local server. Live Server works, or in the terminal: `python3 -m http.server`, then open `http://localhost:8000`. Opening `index.html` straight from the Finder will not reach the camera.
-3. Turn on GitHub Pages: Settings, Pages, branch `main`, folder `/ (root)`. That address is the live URL you submit.
+## Signals and ownership
 
-## The files
+- **`still` — my signal:** `sense.js` measures frame-to-frame movement of the nose landmark. Less movement maps toward `1`; more movement maps toward `0`. This value is smoothed before use, and the `turbulent` / `steady` state rules have holds so a single noisy frame does not flip the state.
+- **`near` — partner signal:** `sense.js` estimates nearness from cheek-to-cheek width in the face mesh and normalizes it to `0–1`. This is a visual proxy, not a calibrated measurement in centimetres. It controls throttle in the game.
+- **`present` — shared baseline signal:** `1` when a face is detected and `0` otherwise. It lets the piece pause when there is no pilot in frame.
 
-| File | Job | Who edits it |
-|---|---|---|
-| `table.js` | Your State Table, row for row: the signals, the states, the rules, the holds | both of you, first |
-| `sense.js` | Reads the camera, turns readings into signals, applies the table, writes `window.sense` | each partner, your own signal |
-| `piece.js` | Reads `window.sense` every frame and answers | both of you |
-| `fake-sense.js` | Writes the same object with no camera: number keys set the state, the mouse sets the signals | only if your signal names change |
-| `index.html` | Loads them in order | rarely |
+The State Table in `table.js` is evaluated top to bottom. `window.sense` stays small and contains only `state`, `signals`, and `since`. The piece reads that object in its own `requestAnimationFrame` loop and does not read the camera.
 
-## The object
+## Run locally
 
-```js
-window.sense = {
-  state: 'here',                          // one word from your State Table
-  signals: { present: 0.98, open: 0.02 }, // each a number from 0 to 1
-  since: 184203.5                         // performance.now() when this state began
-};
-```
+1. Keep `index.html`, `table.js`, `fake-sense.js`, `piece.js`, and `sense.js` in the same folder.
+2. Open a terminal in that folder and run `python3 -m http.server 8000` (or use VS Code Live Server).
+3. Visit `http://localhost:8000` in Chrome.
+4. Click **Start the camera** and grant camera permission. The camera preview is hidden by default. Press **D** to show the current `window.sense` object, **B** to show MediaPipe's named face scores, and **V** to toggle the small camera preview while debugging.
 
-`piece.js` reads this and nothing else. It never touches the camera. That is why the piece keeps running on `fake-sense.js` when no camera is there, and why a scene you build in November can run off the sensor you build now.
+Do not open `index.html` directly from Finder: camera access requires localhost or HTTPS. The first load downloads the pinned MediaPipe library/model. The application does not upload or store frames or landmark lists. The signal keeps only the last nose coordinate needed to calculate frame-to-frame movement. Do not add image/landmark persistence or network uploads.
 
-## Adding your signal
+## Test without a camera
 
-1. Add its name to `signals` in `table.js`.
-2. Add a function with the same name to `SIGNALS` in `sense.js`. It gets one frame's result and returns a number from 0 to 1. There are two patterns in the comments there: one of the 52 named scores from the lab, or geometry from the 478 points.
-3. Use it in a rule in `table.js`. Press **D** to watch the number while you set the threshold. Thresholds that move go in your break log.
+Before the live camera starts, `fake-sense.js` writes the same `window.sense` shape.
 
-## Keys
+- Move the pointer **left to right** to set fake `stillness` from low to high.
+- Move the pointer **bottom to top** to set fake `nearness` from low to high.
+- Moving the pointer marks a mock visitor as present.
+- Press **1–5** to force a State Table row for visual testing.
 
-- **D**: the object `piece.js` reads, live
-- **B**: all 52 named scores, to find the one you measured in the Make a Face lab
-- **V**: the camera, small, in the corner
-- **1, 2, 3 …** and the **mouse**: drive the fake sensor before the camera starts
+This mode is only a development aid; it does not measure real stillness. Reload the page to return to the fake sensor after the camera has started.
 
-## When Start does nothing useful
+## Tune the thresholds with other people
 
-If the readout says the face library did not load, the school network is blocking `cdn.jsdelivr.net`. Press **D** and keep going on the fake sensor: the piece reads the same object either way. A new state you add to `table.js` gets a bright colour of its own in `piece.js` until you give it one.
+Test with at least three people who were not involved in building the piece. Check whether the drone stays legible and the state does not flicker. The `still` formula and thresholds are initial values, not universal measurements; adjust them based on testing, and record every threshold change in the break log below. Do not save camera frames or face landmarks as test data.
 
-## Bench pairs: an Arduino instead of the camera
+## Deploy on GitHub Pages
 
-The bench track swaps the sense layer and nothing else. `piece.js` and `fake-sense.js` stay exactly as they are. The wiring, a photo of a working build and upload fixes are in `bench/README.md`.
+1. Create a repository from the class starter template and add your partner as a collaborator.
+2. Put the five camera-track files above in the repository root. Commit the work in small, meaningful changes.
+3. In GitHub, open **Settings → Pages**. Deploy from branch `main`, folder `/ (root)`.
+4. Open the public Pages URL in a private/incognito window and verify the app loads without logging in. Click **Start the camera** and test with the webcam.
+5. Keep `index.html` as the public entry point. A GitHub repository/dashboard URL is not the live URL.
 
-1. Build the circuit and flash `bench/bench.ino` from the Arduino IDE. It prints one line per reading, like `cm 42.5`. Check it in the IDE's Serial Monitor at 115200, then **close the Serial Monitor**: only one program can hold the port.
-2. Open **`bench.html`** instead of `index.html`, on localhost in **Chrome**. It loads the bench table and the serial sense layer; nothing to edit.
-3. Click **Connect the Arduino** and pick the board. Press **D** to see the raw line and your signals.
-4. Your State Table lives in **`bench/table-bench.js`** (same format as `table.js`). Your signal is a function in `SIGNALS` in `bench/sense-serial.js`: it gets the latest reading (`{ cm: 42.5 }`) and returns 0 to 1. Add the sensor to the sketch's printed line, then its function, then its name in `bench/table-bench.js`.
+## Break log
 
-## What stays in the browser
+Replace these prompts with actual entries as the build changes. Record the commit hash from `git log`; do not invent dates or hashes.
 
-Nothing saves a frame or a landmark list. The model downloads once when you click Start; after that the Network panel stays quiet. Keep it that way: no `localStorage` of readings, no uploads, no screenshots of the camera image in the repo. Screenshots for your break log show the piece or the D readout.
+- **Date:** [fill in] · **Commit:** [hash] · **What broke:** [observed behavior] · **What changed:** [fix / threshold adjustment]
+- **Date:** [fill in] · **Commit:** [hash] · **What broke:** [observed behavior] · **What changed:** [fix / threshold adjustment]
+- **Date:** [fill in] · **Commit:** [hash] · **What broke:** [observed behavior] · **What changed:** [fix / threshold adjustment]
 
-The instrument is MediaPipe Face Landmarker, pinned to version 1.1.1, the same one the Make a Face lab used.
+## Required receipts checklist
+
+- [ ] At least five commits on my `still` signal, spread across at least two dates, with messages describing what changed.
+- [ ] Each merge goes through a pull request approved by my partner.
+- [ ] At least three real break-log entries with dates, commit hashes, failures, and changes.
+- [ ] A recording in my own voice, under two minutes, taken at the live URL. Show my signal from reading to state to game response and end on `git log`.
+- [ ] Screenshots show the piece or the `D` readout / mesh on black; do not include the camera image in the repository.
+- [ ] Final submission contains one PDF with the live URL, repo URL, and my signal name (`still`), plus the recording as a separate file.
+
+## Files
+
+- `sense.js` — MediaPipe camera, signal calculations, smoothing, State Table evaluation, and `window.sense` writer.
+- `table.js` — state names, rules, and hold times.
+- `piece.js` — drone-map game rendered on canvas; reads `window.sense` only.
+- `fake-sense.js` — keyboard/pointer sensor substitute for development.
+- `index.html` — loads the files in the required order.
